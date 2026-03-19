@@ -1,0 +1,37 @@
+services:
+  traefik:
+    image: traefik:latest
+    container_name: hosting_traefik
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    command:
+      # Панель: только с сервера или через SSH-туннель http://127.0.0.1:8080
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=web
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Редирект HTTP → HTTPS (TLS challenge на :443, порту 80 не мешает)
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+    name: web

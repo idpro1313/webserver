@@ -1,0 +1,35 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: ${SITE_CONTAINER_NAME}
+    restart: unless-stopped
+    volumes:
+      - ${SITE_ROOT}:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    networks:
+      - default
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.${TRAEFIK_ROUTER}.service=${TRAEFIK_ROUTER}
+      - "traefik.http.routers.${TRAEFIK_ROUTER}.rule=${TRAEFIK_RULE}"
+      - traefik.http.routers.${TRAEFIK_ROUTER}.entrypoints=websecure
+      - traefik.http.routers.${TRAEFIK_ROUTER}.tls.certresolver=le
+      - traefik.http.services.${TRAEFIK_ROUTER}.loadbalancer.server.port=80
+
+  php:
+    image: php:8.2-fpm-alpine
+    container_name: ${SITE_CONTAINER_NAME}_php
+    restart: unless-stopped
+    volumes:
+      - ${SITE_ROOT}:/usr/share/nginx/html:ro
+    networks:
+      - default
+
+networks:
+  web:
+    external: true
+    name: web

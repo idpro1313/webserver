@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    image: ${NODE_IMAGE_NAME:-node-site-local}
+    container_name: ${SITE_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${APP_PORT:-3000}
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.${TRAEFIK_ROUTER}.service=${TRAEFIK_ROUTER}
+      - "traefik.http.routers.${TRAEFIK_ROUTER}.rule=${TRAEFIK_RULE}"
+      - traefik.http.routers.${TRAEFIK_ROUTER}.entrypoints=websecure
+      - traefik.http.routers.${TRAEFIK_ROUTER}.tls.certresolver=le
+      - traefik.http.services.${TRAEFIK_ROUTER}.loadbalancer.server.port=${APP_PORT:-3000}
+
+networks:
+  web:
+    external: true
+    name: web

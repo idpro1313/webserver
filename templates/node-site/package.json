@@ -1,0 +1,12 @@
+{
+  "name": "node-site-template",
+  "private": true,
+  "description": "Замените на своё приложение или подключите Express/Fastify и т.д.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

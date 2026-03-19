@@ -1,3 +1,4 @@
 .env
 **/.env
 **/letsencrypt/acme.json
+traefikdata/

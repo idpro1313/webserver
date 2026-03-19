@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Запуск Traefik (reverse-proxy) на сервере с Ubuntu + Docker.
-# Запускать из корня репозитория или откуда угодно: скрипт сам найдёт каталог проекта.
+# Корень проекта (ROOT) — каталог, в котором лежат reverse-proxy/, templates/, …
+# Типичный путь на сервере: /opt/<имя-репо> (например /opt/webserver).
+# Каталог sites/ создаётся для удобства; файлы сайтов задаются в SITE_ROOT в .env (часто тоже под /opt).
 #
 # Переопределить email Let's Encrypt:
 #   ACME_EMAIL=другой@mail.ru ./scripts/start-hosting.sh
@@ -37,17 +39,22 @@ else
   echo "   создана"
 fi
 
-echo "→ Каталог сайтов: $ROOT/sites"
+echo "→ Каталог sites/ (необязательно; SITE_ROOT в шаблонах может указывать куда угодно): $ROOT/sites"
 mkdir -p "$ROOT/sites"
 
-echo "→ Let's Encrypt storage: $RP/letsencrypt"
-mkdir -p "$RP/letsencrypt"
-if [[ ! -f "$RP/letsencrypt/acme.json" ]]; then
-  install -m 600 /dev/null "$RP/letsencrypt/acme.json"
-  echo "   создан acme.json (600)"
+DATA="$ROOT/traefikdata"
+echo "→ Данные Traefik (Let's Encrypt и т.д.): $DATA"
+mkdir -p "$DATA/letsencrypt"
+if [[ ! -f "$DATA/letsencrypt/acme.json" ]]; then
+  install -m 600 /dev/null "$DATA/letsencrypt/acme.json"
+  echo "   создан letsencrypt/acme.json (600)"
 else
-  chmod 600 "$RP/letsencrypt/acme.json" 2>/dev/null || true
+  chmod 600 "$DATA/letsencrypt/acme.json" 2>/dev/null || true
   echo "   acme.json уже есть"
+fi
+# Старый путь (до переноса): напоминание при наличии
+if [[ -f "$RP/letsencrypt/acme.json" ]]; then
+  echo "   ⚠ есть $RP/letsencrypt/acme.json — перенесите в $DATA/letsencrypt/ и удалите старую папку (см. README)."
 fi
 
 echo "→ $RP/.env"
@@ -67,7 +74,7 @@ docker compose up -d
 echo ""
 echo "Готово."
 echo "  • HTTP/HTTPS: порты 80 и 443 на этом сервере"
-echo "  • Панель Traefik (только локально): http://127.0.0.1:8080"
+echo "  • Панель Traefik: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'IP_СЕРВЕРА'):8080 (из сети; без пароля — см. README)"
 echo "  • Шаблоны сайтов: $ROOT/templates/"
 echo "  • Каталог для сайтов: $ROOT/sites/"
 echo ""

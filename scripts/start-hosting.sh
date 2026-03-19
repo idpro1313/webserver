@@ -57,13 +57,47 @@ if [[ -f "$RP/letsencrypt/acme.json" ]]; then
   echo "   ⚠ есть $RP/letsencrypt/acme.json — перенесите в $DATA/letsencrypt/ и удалите старую папку (см. README)."
 fi
 
+echo "→ Пароль для панели Traefik (HTTPS): $DATA/dashboard-users"
+if [[ ! -s "$DATA/dashboard-users" ]]; then
+  if [[ -d "$DATA/dashboard-users" ]]; then
+    echo "   Ошибка: $DATA/dashboard-users — это каталог. Удалите его и запустите скрипт снова." >&2
+    exit 1
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "   Ошибка: нужен openssl (например apt install openssl)." >&2
+    exit 1
+  fi
+  DPASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)
+  docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$DPASS" >"$DATA/dashboard-users"
+  chmod 600 "$DATA/dashboard-users"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Панель Traefik по HTTPS: логин admin, пароль (скопируйте сейчас):"
+  echo "  $DPASS"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+else
+  chmod 600 "$DATA/dashboard-users" 2>/dev/null || true
+  echo "   файл уже есть (пароль не менялся)"
+fi
+
 echo "→ $RP/.env"
 if [[ ! -f "$RP/.env" ]]; then
-  printf 'ACME_EMAIL=%s\n' "$ACME_EMAIL" >"$RP/.env"
-  echo "   создан, ACME_EMAIL=$ACME_EMAIL"
+  {
+    printf 'ACME_EMAIL=%s\n' "$ACME_EMAIL"
+    printf '%s\n' 'TRAEFIK_DASHBOARD_HOST=traefik.example.com'
+  } >"$RP/.env"
+  echo "   создан: ACME_EMAIL, TRAEFIK_DASHBOARD_HOST=traefik.example.com"
+  echo "   ⚠ замените TRAEFIK_DASHBOARD_HOST на свой поддомен (A-запись → IP сервера)"
 else
-  echo "   уже существует (не перезаписываю). Текущий ACME_EMAIL:"
-  grep -E '^ACME_EMAIL=' "$RP/.env" || echo "   (строка ACME_EMAIL не найдена — проверьте файл вручную)"
+  echo "   уже существует (не перезаписываю)."
+  grep -E '^ACME_EMAIL=' "$RP/.env" || echo "   ⚠ нет ACME_EMAIL"
+  if grep -q '^TRAEFIK_DASHBOARD_HOST=' "$RP/.env"; then
+    grep -E '^TRAEFIK_DASHBOARD_HOST=' "$RP/.env"
+  else
+    printf '%s\n' 'TRAEFIK_DASHBOARD_HOST=traefik.example.com' >>"$RP/.env"
+    echo "   ⚠ добавлена строка TRAEFIK_DASHBOARD_HOST=traefik.example.com — замените на свой поддомен"
+  fi
 fi
 
 echo "→ Traefik (docker compose up)"
@@ -74,7 +108,9 @@ docker compose up -d
 echo ""
 echo "Готово."
 echo "  • HTTP/HTTPS: порты 80 и 443 на этом сервере"
-echo "  • Панель Traefik: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'IP_СЕРВЕРА'):8080 (из сети; без пароля — см. README)"
+DASH_HOST=$(grep '^TRAEFIK_DASHBOARD_HOST=' "$RP/.env" | cut -d= -f2- | tr -d '\r')
+echo "  • Панель Traefik (HTTPS, Basic Auth): https://${DASH_HOST}"
+echo "  • Только с сервера, без пароля: http://127.0.0.1:8080"
 echo "  • Шаблоны сайтов: $ROOT/templates/"
 echo "  • Каталог для сайтов: $ROOT/sites/"
 echo ""

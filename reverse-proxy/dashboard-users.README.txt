@@ -1,0 +1,14 @@
+Файл с паролем для панели Traefik (HTTPS) лежит рядом в каталоге traefikdata/:
+
+  ../traefikdata/dashboard-users
+
+Формат — как у Apache htpasswd (одна или несколько строк user:hash).
+
+Создать или сменить пароль (логин admin):
+
+  docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'ВАШ_ПАРОЛЬ' > /opt/webserver/traefikdata/dashboard-users
+  chmod 600 /opt/webserver/traefikdata/dashboard-users
+
+Путь поправьте под свой корень репозитория. Затем:
+
+  cd reverse-proxy && docker compose up -d

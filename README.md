@@ -23,7 +23,7 @@ chmod +x scripts/start-hosting.sh
 ./scripts/start-hosting.sh
 ```
 
-Скрипт создаст сеть `web`, каталоги `sites/` и **`traefikdata/letsencrypt/acme.json`** (на уровень выше `reverse-proxy/`, данные сохраняются при пересборке образа Traefik), при первом запуске — `reverse-proxy/.env` с **ACME_EMAIL** для Let’s Encrypt (по умолчанию `idpro13@gmail.com`). Чтобы указать другой email:
+Скрипт создаст сеть `web`, каталоги `sites/`, **`traefikdata/letsencrypt/acme.json`**, файл **`traefikdata/dashboard-users`** (пароль для HTTPS-панели; случайный пароль выводится в консоль), при первом запуске — `reverse-proxy/.env` с **ACME_EMAIL** и заготовкой **TRAEFIK_DASHBOARD_HOST** (замените на свой поддомен). Чтобы указать другой email:
 
 ```bash
 ACME_EMAIL=you@example.com ./scripts/start-hosting.sh
@@ -41,16 +41,24 @@ touch traefikdata/letsencrypt/acme.json
 chmod 600 traefikdata/letsencrypt/acme.json
 cd reverse-proxy
 cp env.example .env
-# пропишите ACME_EMAIL в .env
+# пропишите ACME_EMAIL и TRAEFIK_DASHBOARD_HOST (поддомен панели, A → IP сервера)
+cd ..
+docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'ВАШ_ПАРОЛЬ' > traefikdata/dashboard-users
+chmod 600 traefikdata/dashboard-users
+cd reverse-proxy
 docker compose up -d
 ```
 
-- **Панель Traefik** открыта **снаружи** на порту **8080**: `http://ВАШ_IP:8080` (режим `--api.insecure`, **без логина**).  
-  **Рекомендуется** не открывать 8080 всем подряд: в UFW используйте `sudo ufw allow from ВАШ_IP to any port 8080 proto tcp` и **не** добавляйте общее правило `ufw allow 8080`. Либо закройте 8080 в панели облака и заходите через VPN/SSH-туннель.
+### Панель Traefik (админка)
+
+- **С интернета — с паролем:** `https://<TRAEFIK_DASHBOARD_HOST>` (тот же Let’s Encrypt, что и у сайтов). Логин/пароль задаются в **`traefikdata/dashboard-users`** (формат htpasswd). Скрипт `start-hosting.sh` при первом запуске создаёт этот файл и один раз печатает случайный пароль (логин **`admin`**).
+- **С самого сервера — без пароля:** `http://127.0.0.1:8080` (порт привязан только к localhost, снаружи недоступен).
+
+Поддомен из **`TRAEFIK_DASHBOARD_HOST`** в `reverse-proxy/.env` должен иметь **A-запись** на IP сервера. Смена пароля: см. `reverse-proxy/dashboard-users.README.txt`.
 
 ### 3. DNS
 
-Для каждого домена A-запись на IP сервера (например `31.15.19.102`). Порты **80** и **443** должны быть доступны с интернета.
+Для каждого домена и для **поддомена панели** (`TRAEFIK_DASHBOARD_HOST`) — A-запись на IP сервера (например `31.15.19.102`). Порты **80** и **443** должны быть доступны с интернета.
 
 ### 4. Новый сайт
 
@@ -104,7 +112,12 @@ docker compose up -d
 
 ## Где Traefik хранит данные
 
-В этом проекте в контейнер монтируется **`traefikdata/letsencrypt/`** (путь **на уровень выше** каталога `reverse-proxy/`). Там лежит **`acme.json`** — сертификаты Let’s Encrypt; при `docker compose pull` / пересоздании контейнера они **не теряются**.
+В контейнер монтируется каталог **`traefikdata/`** (на уровень выше `reverse-proxy/`):
+
+- **`letsencrypt/acme.json`** — сертификаты Let’s Encrypt;
+- **`dashboard-users`** — логин/пароль Basic Auth для панели по HTTPS.
+
+При пересборке образа Traefik эти файлы на хосте **сохраняются**.
 
 Раньше использовался `reverse-proxy/letsencrypt/` — если там уже есть `acme.json`, перенесите:
 
@@ -123,7 +136,8 @@ scripts/
   start-hosting.sh # первичный запуск Traefik на сервере
 traefikdata/       # постоянные данные Traefik (на хосте); в git не коммитится
   letsencrypt/     # acme.json — сертификаты LE
-reverse-proxy/     # Traefik: 80, 443; панель на :8080 (снаружи, без пароля — ограничьте firewall)
+  dashboard-users    # htpasswd для панели по HTTPS
+reverse-proxy/     # Traefik: 80, 443; панель HTTPS с паролем + 127.0.0.1:8080 без пароля
 sites/             # опционально; шаблоны можно копировать куда угодно. SITE_ROOT — любой путь на диске (PHP/статика)
 templates/
   php-site/

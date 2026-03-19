@@ -6,15 +6,14 @@ services:
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
     command:
-      # Панель: http://СЕРВЕР:8080 (доступна извне — см. README про безопасность)
       - --api.dashboard=true
+      # Без пароля только с самого сервера: http://127.0.0.1:8080
       - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=web
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      # Редирект HTTP → HTTPS (TLS challenge на :443, порту 80 не мешает)
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.web.http.redirections.entrypoint.permanent=true
@@ -24,13 +23,23 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Данные на хосте: каталог на уровень выше reverse-proxy (соседний с ним)
       - ../traefikdata/letsencrypt:/letsencrypt
+      - ../traefikdata/dashboard-users:/etc/traefik/dashboard-users:ro
     networks:
       - web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      # Снаружи: HTTPS + Basic Auth (логин/пароль из traefikdata/dashboard-users)
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DASHBOARD_HOST}`)"
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.tls.certresolver=le
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.routers.traefik-dashboard.middlewares=traefik-dashboard-auth
+      - traefik.http.middlewares.traefik-dashboard-auth.basicauth.usersfile=/etc/traefik/dashboard-users
 
 networks:
   web:
